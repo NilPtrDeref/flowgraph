@@ -2,15 +2,12 @@ package main
 
 import (
 	"github.com/faiface/pixel"
-	"github.com/faiface/pixel/imdraw"
-	"image/color"
 	"math/rand"
 )
 
 type Particle struct {
 	pos, vel pixel.Vec
-	color    color.RGBA
-	radius   float64
+	color    *pixel.Sprite
 }
 
 // Create a particle with a random starting position/color.
@@ -21,9 +18,8 @@ func NewParticle() *Particle {
 			Scale(rand.Float64(), 0, WINDOW_X, 0, 1),
 			Scale(rand.Float64(), 0, WINDOW_Y, 0, 1),
 		),
-		vel:    pixel.V(0, 0),
-		color:  colors[rand.Intn(len(colors))],
-		radius: 0.5,
+		vel:   pixel.V(0, 0),
+		color: sprites[rand.Intn(len(sprites))],
 	}
 
 	return p
@@ -63,11 +59,6 @@ func (p *Particle) Update(accl pixel.Vec) {
 }
 
 // Draw a particle to the screen
-func (p *Particle) Draw(win pixel.Target, imd *imdraw.IMDraw) {
-	imd.Color = p.color
-	imd.Push(p.pos)
-	imd.Circle(p.radius, 1)
-	imd.Draw(win)
-	imd.Reset()
-	imd.Clear()
+func (p *Particle) Draw(win pixel.Target) {
+	p.color.Draw(win, pixel.IM.Moved(p.pos))
 }

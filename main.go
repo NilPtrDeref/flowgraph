@@ -2,12 +2,13 @@ package main
 
 import (
 	"github.com/faiface/pixel"
-	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/ojrac/opensimplex-go"
+	"golang.org/x/image/colornames"
 	"image/color"
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -24,24 +25,55 @@ const MIN_FRAMETIME time.Duration = 0
 // Maximum velocity of the particles
 const MAX_VELOCITY float64 = 0.5
 
-// How fast the depth changes
-const DELTA_Z = 0.00001
+// How fast the depth changes.
+// Bigger is more change.
+const DELTA_Z = 0.0001
 
 // How close the x/y value neighbors should be (for simplex noise)
-// Closer is more similar.
-const SIMILARITY = 0.01
+// Smaller is more similar.
+const SIMILARITY = 0.09
+
+// Number of particles to flow.
+const NUM_PARTICLES = 5000
+
+// Number of threads to render the particles with.
+// DO NOT MAKE THIS <= 0, IT WILL CRASH THE PROGRAM!
+const PARTICLE_THREADS = 10
 
 // Maximum angle for acceleration within a node.
-const MAX_ANGLE = math.Pi * 2
+const MAX_ANGLE = math.Pi / 2
+
+const PARTICLE_WIDTH = 2
 
 var noise = opensimplex.NewNormalized(time.Now().Unix())
 var depth float64 = 0
 var colors = []color.RGBA{
-	{0xEE, 0xB4, 0xB3, 0xFF},
-	{0xC1, 0x79, 0xB9, 0xFF},
-	{0xA4, 0x2C, 0xD6, 0xFF},
-	{0x50, 0x22, 0x74, 0xFF},
-	{0x2F, 0x24, 0x2C, 0xFF},
+	{0xAF, 0xD2, 0xE9, 0xFF},
+	{0x9D, 0x96, 0xB8, 0xFF},
+	{0x9A, 0x71, 0x97, 0xFF},
+	{0x88, 0x61, 0x76, 0xFF},
+	{0x7C, 0x58, 0x69, 0xFF},
+}
+var picture *pixel.PictureData
+var sprites []*pixel.Sprite
+
+func init() {
+	l := len(colors)
+	picture = pixel.MakePictureData(pixel.R(0, 0, PARTICLE_WIDTH, PARTICLE_WIDTH*float64(l)))
+
+	for i := range picture.Pix {
+		picture.Pix[i] = colors[i/int(PARTICLE_WIDTH*PARTICLE_WIDTH)]
+	}
+
+	for c := range colors {
+		sprites = append(sprites, pixel.NewSprite(
+			picture,
+			pixel.R(
+				0, float64(c)*PARTICLE_WIDTH,
+				PARTICLE_WIDTH, float64(c)*PARTICLE_WIDTH+PARTICLE_WIDTH,
+			),
+		))
+	}
 }
 
 // Scale a floating point number to fit between two values.
@@ -84,16 +116,18 @@ func run() {
 	// Create particles that accelerate based on the vector of the node they are
 	// currently in.
 	var particles []*Particle
-	for i := 0; i < 200; i++ {
+	for i := 0; i < NUM_PARTICLES; i++ {
 		particles = append(particles, NewParticle())
 	}
 
 	// Create batch and drawer for fast drawing
-	batch := pixel.NewBatch(
-		&pixel.TrianglesData{},
-		pixel.MakePictureData(pixel.R(0, 0, WINDOW_X, WINDOW_Y)),
-	)
-	imd := imdraw.New(nil)
+	batches := [PARTICLE_THREADS]*pixel.Batch{}
+	for i := 0; i < PARTICLE_THREADS; i++ {
+		batches[i] = pixel.NewBatch(
+			&pixel.TrianglesData{},
+			picture,
+		)
+	}
 
 	// Flow loop
 	t := time.Now()
@@ -101,6 +135,29 @@ func run() {
 		// Quit if escape pressed
 		if win.JustPressed(pixelgl.KeyEscape) {
 			return
+		}
+
+		// Restart graph
+		if win.JustPressed(pixelgl.KeyR) {
+			// Clear screen
+			win.Clear(colornames.Black)
+
+			noise = opensimplex.NewNormalized(time.Now().Unix())
+
+			// Reset grid
+			for x := 0; x < width; x++ {
+				for y := 0; y < height; y++ {
+					grid[x][y] = NewNode(
+						float64(x)*SCALE+SCALE/2, float64(y)*SCALE+SCALE/2,
+					)
+				}
+			}
+
+			// Reset particles
+			particles = []*Particle{}
+			for i := 0; i < NUM_PARTICLES; i++ {
+				particles = append(particles, NewParticle())
+			}
 		}
 
 		// Enforce minimum frametime
@@ -116,34 +173,54 @@ func run() {
 		for x := range grid {
 			for y := range grid[x] {
 				// Uncomment to draw vectors showing acceleration
-				// grid[x][y].Draw(batch, imd)
+				// grid[x][y].Draw(batches[0], imd[0])
 
 				grid[x][y].Update()
 			}
 		}
 		depth += DELTA_Z
 
-		//Move, update the acceleration of and draw the particles
-		for _, particle := range particles {
-			particle.Move()
-
-			x := math.Floor(particle.pos.X / SCALE)
-			y := math.Floor(particle.pos.Y / SCALE)
-			if int(x) < width && int(y) < height &&
-				int(x) > 0 && int(y) > 0 {
-				particle.Update(grid[int(x)][int(y)].accl)
-			}
-
-			particle.Draw(batch, imd)
+		//Move and update the acceleration of the particles
+		// Multithreaded to prevent slowdown if possible
+		wg := &sync.WaitGroup{}
+		for i := 0; i < PARTICLE_THREADS; i++ {
+			wg.Add(1)
+			UpdateAndDrawParticles(i, particles, wg, batches[i], grid)
 		}
+		wg.Wait()
 
 		// Batch draw to the screen
-		batch.Draw(win)
-		batch.Clear()
+		for _, batch := range batches {
+			batch.Draw(win)
+			batch.Clear()
+		}
 
 		win.Update()
 		t = time.Now()
 	}
+}
+
+func UpdateAndDrawParticles(i int, particles []*Particle, wg *sync.WaitGroup,
+	batch *pixel.Batch, grid [][]*Node) {
+	width := int(WINDOW_X / SCALE)
+	height := int(WINDOW_Y / SCALE)
+	start := i * (NUM_PARTICLES / PARTICLE_THREADS)
+	stop := start + (NUM_PARTICLES / PARTICLE_THREADS)
+	for j := start; j < stop; j++ {
+		particles[j].Move()
+
+		x := math.Floor(particles[j].pos.X / SCALE)
+		y := math.Floor(particles[j].pos.Y / SCALE)
+
+		if int(x) < width && int(y) < height &&
+			int(x) >= 0 && int(y) >= 0 {
+			particles[j].Update(grid[int(x)][int(y)].accl)
+		}
+
+		particles[j].Draw(batch)
+	}
+
+	wg.Done()
 }
 
 func main() {

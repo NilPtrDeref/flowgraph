@@ -8,7 +8,13 @@ To run the program, run the following command.
 go run *.go
 ```
 
-![screenshot](img/screen.png)
-
 ## Controls
 `Esc` - Exits the program
+
+`r` - Restarts the grid/particles
+
+![screenshot](img/screen.png)
+
+![screenshot](img/screen2.png)
+
+![screenshot](img/screen3.png)
