@@ -34,14 +34,15 @@ const DELTA_Z = 0.0001
 const SIMILARITY = 0.09
 
 // Number of particles to flow.
-const NUM_PARTICLES = 5000
+const NUM_PARTICLES = 1000
 
 // Number of threads to render the particles with.
 // DO NOT MAKE THIS <= 0, IT WILL CRASH THE PROGRAM!
 const PARTICLE_THREADS = 10
 
 // Maximum angle for acceleration within a node.
-const MAX_ANGLE = math.Pi * 2
+const MAX_ANGLE = math.Pi * 1
+const MIN_ANGLE = math.Pi * -1
 
 const PARTICLE_WIDTH = 2
 
