@@ -24,6 +24,7 @@ const MIN_FRAMETIME time.Duration = 0
 
 // Maximum velocity of the particles
 const MAX_VELOCITY float64 = 0.5
+const ACCELERATION_MAGNITUDE = 0.01
 
 // How fast the depth changes.
 // Bigger is more change.
@@ -34,15 +35,15 @@ const DELTA_Z = 0.0001
 const SIMILARITY = 0.09
 
 // Number of particles to flow.
-const NUM_PARTICLES = 1000
+const NUM_PARTICLES = 5000
 
 // Number of threads to render the particles with.
 // DO NOT MAKE THIS <= 0, IT WILL CRASH THE PROGRAM!
 const PARTICLE_THREADS = 10
 
 // Maximum angle for acceleration within a node.
-const MAX_ANGLE = math.Pi * 1
-const MIN_ANGLE = math.Pi * -1
+const MAX_ANGLE = math.Pi * 2
+const MIN_ANGLE = math.Pi * -2
 
 const PARTICLE_WIDTH = 2
 
@@ -60,7 +61,9 @@ var sprites []*pixel.Sprite
 
 func init() {
 	l := len(colors)
-	picture = pixel.MakePictureData(pixel.R(0, 0, PARTICLE_WIDTH, PARTICLE_WIDTH*float64(l)))
+	picture = pixel.MakePictureData(
+		pixel.R(0, 0, PARTICLE_WIDTH, PARTICLE_WIDTH*float64(l)),
+	)
 
 	for i := range picture.Pix {
 		picture.Pix[i] = colors[i/int(PARTICLE_WIDTH*PARTICLE_WIDTH)]
@@ -149,7 +152,8 @@ func run() {
 			for x := 0; x < width; x++ {
 				for y := 0; y < height; y++ {
 					grid[x][y] = NewNode(
-						float64(x)*SCALE+SCALE/2, float64(y)*SCALE+SCALE/2,
+						float64(x)*SCALE+SCALE/2,
+						float64(y)*SCALE+SCALE/2,
 					)
 				}
 			}
@@ -168,7 +172,7 @@ func run() {
 		}
 
 		// Uncomment to clear screen after every frame
-		//win.Clear(colornames.Black)
+		win.Clear(colornames.Black)
 
 		// Update nodes' acceleration
 		for x := range grid {

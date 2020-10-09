@@ -40,5 +40,5 @@ func (n *Node) Update() {
 	)
 
 	angle := Scale(nval, MIN_ANGLE, MAX_ANGLE, 0, 1)
-	n.accl = pixel.Unit(angle).Scaled(0.01)
+	n.accl = pixel.Unit(angle).Scaled(ACCELERATION_MAGNITUDE)
 }
