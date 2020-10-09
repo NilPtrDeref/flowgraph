@@ -39,6 +39,6 @@ func (n *Node) Update() {
 		depth,
 	)
 
-	angle := MAX_ANGLE * nval
+	angle := Scale(nval, 0, MAX_ANGLE, 0, 1)
 	n.accl = pixel.Unit(angle).Scaled(0.01)
 }

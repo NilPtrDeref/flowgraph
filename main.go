@@ -41,7 +41,7 @@ const NUM_PARTICLES = 5000
 const PARTICLE_THREADS = 10
 
 // Maximum angle for acceleration within a node.
-const MAX_ANGLE = math.Pi / 2
+const MAX_ANGLE = math.Pi * 2
 
 const PARTICLE_WIDTH = 2
 
