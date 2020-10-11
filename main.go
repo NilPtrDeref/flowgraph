@@ -53,7 +53,7 @@ const PARTICLE_WIDTH = 2
 const COLORSCHEME_SCALE = 50
 
 // Number of frames to record.
-// If it is greater than 0, the program will generate a gif at output.gif
+// If it is greater than 0, the program will generate a gif at render.gif
 // and then exit.
 const RECORD_FRAMES = 1200
 
@@ -222,7 +222,7 @@ func main() {
 
 	grid := NewGrid()
 	if RECORD_FRAMES > 0 {
-		file, err := os.Create("output.gif")
+		file, err := os.Create("render.gif")
 		if err != nil {
 			panic(err)
 		}
