@@ -2,14 +2,16 @@ package main
 
 import (
 	"fmt"
-	"github.com/hajimehoshi/ebiten"
-	"github.com/ojrac/opensimplex-go"
 	"image"
 	"image/color"
 	"log"
 	"math"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/hajimehoshi/ebiten"
+	"github.com/ojrac/opensimplex-go"
 )
 
 /* Global constants */
@@ -49,6 +51,8 @@ const PARTICLE_WIDTH = 2
 
 const COLORSCHEME_SCALE = 50
 
+const RECORD_FRAMES = 1200
+
 var noise = opensimplex.NewNormalized(time.Now().Unix())
 var depth float64 = 0
 var colors = []color.RGBA{
@@ -84,6 +88,7 @@ type Grid struct {
 	width, height int
 	grid          [][]*Node
 	particles     []*Particle
+	recorder      *Recorder
 }
 
 func NewGrid() *Grid {
@@ -194,6 +199,10 @@ func (g *Grid) Draw(screen *ebiten.Image) {
 	// Uncomment to draw fps in top left
 	//fps := fmt.Sprintf("Current FPS: %.1f", ebiten.CurrentFPS())
 	//ebitenutil.DebugPrint(screen, fps)
+
+	if g.recorder != nil {
+		_ = g.recorder.Update(screen)
+	}
 }
 
 func (g *Grid) Layout(_, _ int) (int, int) {
@@ -206,7 +215,18 @@ func main() {
 	ebiten.SetMaxTPS(60)
 	ebiten.SetScreenClearedEveryFrame(CLEAR_EACH_FRAME)
 	ebiten.SetRunnableOnUnfocused(true)
-	if err := ebiten.RunGame(NewGrid()); err != nil {
+
+	grid := NewGrid()
+	if RECORD_FRAMES != 0 {
+		file, err := os.Create("output.gif")
+		if err != nil {
+			panic(err)
+		}
+		defer file.Close()
+		grid.recorder = NewRecorder(file, RECORD_FRAMES)
+	}
+
+	if err := ebiten.RunGame(grid); err != nil {
 		log.Fatal(err)
 	}
 }
