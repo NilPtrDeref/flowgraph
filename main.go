@@ -55,7 +55,7 @@ const COLORSCHEME_SCALE = 50
 // Number of frames to record.
 // If it is greater than 0, the program will generate a gif at render.gif
 // and then exit.
-const RECORD_FRAMES = 1200
+const RECORD_FRAMES = 0
 
 var noise = opensimplex.NewNormalized(time.Now().Unix())
 var depth float64 = 0
@@ -222,7 +222,7 @@ func main() {
 
 	grid := NewGrid()
 	if RECORD_FRAMES > 0 {
-		file, err := os.Create("render.gif")
+		file, err := os.Create("output.gif")
 		if err != nil {
 			panic(err)
 		}
