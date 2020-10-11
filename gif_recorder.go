@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"image/color/palette"
 	"image/draw"
 	"image/gif"
 	"io"
+	"os"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten"
@@ -17,6 +19,29 @@ type Recorder struct {
 	gif          *gif.GIF
 	currentFrame int
 	wg           sync.WaitGroup
+	pipe         chan order
+}
+
+type order struct {
+	frame int
+	img   *ebiten.Image
+}
+
+func NewRecorder(out io.Writer, frames int) *Recorder {
+	r := &Recorder{
+		Writer: out,
+		frames: frames,
+		gif: &gif.GIF{
+			Image:     make([]*image.Paletted, frames),
+			Delay:     make([]int, frames),
+			LoopCount: -1,
+		},
+		pipe: make(chan order, frames),
+	}
+
+	go r.Record()
+
+	return r
 }
 
 func (r *Recorder) delay() int {
@@ -32,37 +57,34 @@ func (r *Recorder) Update(screen *ebiten.Image) error {
 		return nil
 	}
 
-	s := image.NewNRGBA(screen.Bounds())
-	draw.Draw(s, s.Bounds(), screen, screen.Bounds().Min, draw.Src)
-
-	img := image.NewPaletted(s.Bounds(), palette.Plan9)
-	f := r.currentFrame
-	r.wg.Add(1)
-	go func() {
-		defer r.wg.Done()
-		draw.FloydSteinberg.Draw(img, img.Bounds(), s, s.Bounds().Min)
-		r.gif.Image[f] = img
-		r.gif.Delay[f] = r.delay()
-	}()
+	clone, _ := ebiten.NewImageFromImage(screen, ebiten.FilterDefault)
+	r.pipe <- order{r.currentFrame, clone}
 
 	r.currentFrame++
 	if r.currentFrame == r.frames {
-		r.wg.Wait()
-		if err := gif.EncodeAll(r.Writer, r.gif); err != nil {
-			return err
-		}
+		close(r.pipe)
 	}
 	return nil
 }
 
-func NewRecorder(out io.Writer, frames int) *Recorder {
-	return &Recorder{
-		Writer: out,
-		frames: frames,
-		gif: &gif.GIF{
-			Image:     make([]*image.Paletted, frames),
-			Delay:     make([]int, frames),
-			LoopCount: -1,
-		},
+func (r *Recorder) Record() {
+	for ord := range r.pipe {
+		r.wg.Add(1)
+
+		go func(ord order) {
+			img := image.NewPaletted(ord.img.Bounds(), palette.Plan9)
+			draw.FloydSteinberg.Draw(img, img.Bounds(), ord.img, ord.img.Bounds().Min)
+			r.gif.Image[ord.frame] = img
+			r.gif.Delay[ord.frame] = 2
+			r.wg.Done()
+		}(ord)
 	}
+
+	r.wg.Wait()
+	err := gif.EncodeAll(r.Writer, r.gif)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Done outputting gif")
+	os.Exit(0)
 }
