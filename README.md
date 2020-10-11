@@ -13,8 +13,9 @@ go run *.go
 
 `r` - Restarts the grid/particles
 
+### Examples
+![screenshot](img/output.gif)
+
 ![screenshot](img/screen.png)
 
 ![screenshot](img/screen2.png)
-
-![screenshot](img/screen3.png)

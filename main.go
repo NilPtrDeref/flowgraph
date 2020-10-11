@@ -16,7 +16,8 @@ import (
 
 /* Global constants */
 // Window width and height
-const WINDOW_X, WINDOW_Y float64 = 1200, 800
+//const WINDOW_X, WINDOW_Y float64 = 1200, 800
+const WINDOW_X, WINDOW_Y float64 = 600, 600
 
 // Grid element width/height
 const SCALE float64 = 5
@@ -54,7 +55,7 @@ const COLORSCHEME_SCALE = 50
 // Number of frames to record.
 // If it is greater than 0, the program will generate a gif at output.gif
 // and then exit.
-const RECORD_FRAMES = 0
+const RECORD_FRAMES = 1200
 
 var noise = opensimplex.NewNormalized(time.Now().Unix())
 var depth float64 = 0
