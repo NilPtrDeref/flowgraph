@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"image"
-	"image/color/palette"
+	"image/color"
 	"image/draw"
 	"image/gif"
 	"io"
@@ -12,6 +12,20 @@ import (
 
 	"github.com/hajimehoshi/ebiten"
 )
+
+var cheapPalette color.Palette
+
+func init() {
+	cs := []color.Color{}
+	for _, r := range []uint8{0x00, 0x80, 0xff} {
+		for _, g := range []uint8{0x00, 0x80, 0xff} {
+			for _, b := range []uint8{0x00, 0x80, 0xff} {
+				cs = append(cs, color.RGBA{r, g, b, 0xff})
+			}
+		}
+	}
+	cheapPalette = color.Palette(cs)
+}
 
 type Recorder struct {
 	Writer       io.Writer
@@ -36,7 +50,7 @@ func NewRecorder(out io.Writer, frames int) *Recorder {
 			Delay:     make([]int, frames),
 			LoopCount: -1,
 		},
-		pipe: make(chan order, frames),
+		pipe: make(chan order),
 	}
 
 	go r.Record()
@@ -69,18 +83,14 @@ func (r *Recorder) Update(screen *ebiten.Image) error {
 
 func (r *Recorder) Record() {
 	for ord := range r.pipe {
-		r.wg.Add(1)
-
-		go func(ord order) {
-			img := image.NewPaletted(ord.img.Bounds(), palette.Plan9)
-			draw.FloydSteinberg.Draw(img, img.Bounds(), ord.img, ord.img.Bounds().Min)
-			r.gif.Image[ord.frame] = img
-			r.gif.Delay[ord.frame] = 2
-			r.wg.Done()
-		}(ord)
+		fmt.Println("Rendering frame", ord.frame)
+		img := image.NewPaletted(ord.img.Bounds(), cheapPalette)
+		//img := image.NewPaletted(ord.img.Bounds(), palette.Plan9)
+		draw.FloydSteinberg.Draw(img, img.Bounds(), ord.img, ord.img.Bounds().Min)
+		r.gif.Image[ord.frame] = img
+		r.gif.Delay[ord.frame] = 2
 	}
 
-	r.wg.Wait()
 	err := gif.EncodeAll(r.Writer, r.gif)
 	if err != nil {
 		panic(err)
