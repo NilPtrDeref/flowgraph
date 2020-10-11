@@ -1,41 +1,41 @@
 package main
 
 import (
-	"github.com/faiface/pixel"
-	"github.com/faiface/pixel/pixelgl"
+	"fmt"
+	"github.com/hajimehoshi/ebiten"
 	"github.com/ojrac/opensimplex-go"
-	"golang.org/x/image/colornames"
+	"image"
 	"image/color"
+	"log"
 	"math"
-	"math/rand"
 	"sync"
 	"time"
 )
 
 /* Global constants */
 // Window width and height
-const WINDOW_X, WINDOW_Y float64 = 600, 600
+const WINDOW_X, WINDOW_Y float64 = 1200, 800
 
 // Grid element width/height
 const SCALE float64 = 5
 
-// Minimum time per frame
-const MIN_FRAMETIME time.Duration = 0
-
 // Maximum velocity of the particles
-const MAX_VELOCITY float64 = 0.5
-const ACCELERATION_MAGNITUDE = 0.01
+const MAX_VELOCITY float64 = 1.5
+const ACCELERATION_MAGNITUDE = 0.1
+
+// Whether the program should clear the frame each time
+const CLEAR_EACH_FRAME = true
 
 // How fast the depth changes.
 // Bigger is more change.
-const DELTA_Z = 0.0001
+const DELTA_Z = 0.001
 
 // How close the x/y value neighbors should be (for simplex noise)
 // Smaller is more similar.
-const SIMILARITY = 0.09
+const SIMILARITY = 0.1
 
 // Number of particles to flow.
-const NUM_PARTICLES = 5000
+const NUM_PARTICLES = 20000
 
 // Number of threads to render the particles with.
 // DO NOT MAKE THIS <= 0, IT WILL CRASH THE PROGRAM!
@@ -47,6 +47,8 @@ const MIN_ANGLE = math.Pi * -2
 
 const PARTICLE_WIDTH = 2
 
+const COLORSCHEME_SCALE = 50
+
 var noise = opensimplex.NewNormalized(time.Now().Unix())
 var depth float64 = 0
 var colors = []color.RGBA{
@@ -56,27 +58,18 @@ var colors = []color.RGBA{
 	{0x88, 0x61, 0x76, 0xFF},
 	{0x7C, 0x58, 0x69, 0xFF},
 }
-var picture *pixel.PictureData
-var sprites []*pixel.Sprite
+var picture *ebiten.Image
+var sprites []*ebiten.Image
 
 func init() {
 	l := len(colors)
-	picture = pixel.MakePictureData(
-		pixel.R(0, 0, PARTICLE_WIDTH, PARTICLE_WIDTH*float64(l)),
-	)
+	picture, _ = ebiten.NewImage(1, l, ebiten.FilterDefault)
 
-	for i := range picture.Pix {
-		picture.Pix[i] = colors[i/int(PARTICLE_WIDTH*PARTICLE_WIDTH)]
-	}
-
-	for c := range colors {
-		sprites = append(sprites, pixel.NewSprite(
-			picture,
-			pixel.R(
-				0, float64(c)*PARTICLE_WIDTH,
-				PARTICLE_WIDTH, float64(c)*PARTICLE_WIDTH+PARTICLE_WIDTH,
-			),
-		))
+	for i := 0; i < l; i++ {
+		picture.Set(0, i, colors[i])
+		sprites = append(sprites, picture.SubImage(
+			image.Rect(0, i, 1, i+1),
+		).(*ebiten.Image))
 	}
 }
 
@@ -87,23 +80,13 @@ func Scale(val, minallow, maxallow, min, max float64) float64 {
 	return (maxallow-minallow)*(val-min)/(max-min) + minallow
 }
 
-func run() {
-	// Set up window
-	cfg := pixelgl.WindowConfig{
-		Title:  "Flowgraph",
-		Bounds: pixel.R(0, 0, WINDOW_X, WINDOW_Y),
-		VSync:  false,
-		Icon: []pixel.Picture{
-			pixel.MakePictureData(
-				pixel.R(0, 0, 16, 16),
-			),
-		},
-	}
-	win, err := pixelgl.NewWindow(cfg)
-	if err != nil {
-		panic(err)
-	}
+type Grid struct {
+	width, height int
+	grid          [][]*Node
+	particles     []*Particle
+}
 
+func NewGrid() *Grid {
 	// Create the grid that contains all of the nodes
 	width := int(WINDOW_X / SCALE)
 	height := int(WINDOW_Y / SCALE)
@@ -124,111 +107,106 @@ func run() {
 		particles = append(particles, NewParticle())
 	}
 
-	// Create batch and drawer for fast drawing
-	batches := [PARTICLE_THREADS]*pixel.Batch{}
-	for i := 0; i < PARTICLE_THREADS; i++ {
-		batches[i] = pixel.NewBatch(
-			&pixel.TrianglesData{},
-			picture,
-		)
-	}
-
-	// Flow loop
-	t := time.Now()
-	for !win.Closed() {
-		// Quit if escape pressed
-		if win.JustPressed(pixelgl.KeyEscape) {
-			return
-		}
-
-		// Restart graph
-		if win.JustPressed(pixelgl.KeyR) {
-			// Clear screen
-			win.Clear(colornames.Black)
-
-			noise = opensimplex.NewNormalized(time.Now().Unix())
-
-			// Reset grid
-			for x := 0; x < width; x++ {
-				for y := 0; y < height; y++ {
-					grid[x][y] = NewNode(
-						float64(x)*SCALE+SCALE/2,
-						float64(y)*SCALE+SCALE/2,
-					)
-				}
-			}
-
-			// Reset particles
-			particles = []*Particle{}
-			for i := 0; i < NUM_PARTICLES; i++ {
-				particles = append(particles, NewParticle())
-			}
-		}
-
-		// Enforce minimum frametime
-		dt := time.Since(t)
-		if dt < MIN_FRAMETIME {
-			continue
-		}
-
-		// Uncomment to clear screen after every frame
-		win.Clear(colornames.Black)
-
-		// Update nodes' acceleration
-		for x := range grid {
-			for y := range grid[x] {
-				// Uncomment to draw vectors showing acceleration
-				// grid[x][y].Draw(batches[0], imd[0])
-
-				grid[x][y].Update()
-			}
-		}
-		depth += DELTA_Z
-
-		//Move and update the acceleration of the particles
-		// Multithreaded to prevent slowdown if possible
-		wg := &sync.WaitGroup{}
-		for i := 0; i < PARTICLE_THREADS; i++ {
-			wg.Add(1)
-			UpdateAndDrawParticles(i, particles, wg, batches[i], grid)
-		}
-		wg.Wait()
-
-		// Batch draw to the screen
-		for _, batch := range batches {
-			batch.Draw(win)
-			batch.Clear()
-		}
-
-		win.Update()
-		t = time.Now()
+	return &Grid{
+		width:     width,
+		height:    height,
+		grid:      grid,
+		particles: particles,
 	}
 }
 
-func UpdateAndDrawParticles(i int, particles []*Particle, wg *sync.WaitGroup,
-	batch *pixel.Batch, grid [][]*Node) {
-	width := int(WINDOW_X / SCALE)
-	height := int(WINDOW_Y / SCALE)
-	start := i * (NUM_PARTICLES / PARTICLE_THREADS)
-	stop := start + (NUM_PARTICLES / PARTICLE_THREADS)
-	for j := start; j < stop; j++ {
-		particles[j].Move()
+func (g *Grid) Restart() {
+	noise = opensimplex.NewNormalized(time.Now().Unix())
 
-		x := math.Floor(particles[j].pos.X / SCALE)
-		y := math.Floor(particles[j].pos.Y / SCALE)
-
-		if int(x) < width && int(y) < height &&
-			int(x) >= 0 && int(y) >= 0 {
-			particles[j].Update(grid[int(x)][int(y)].accl)
+	//Reset grid
+	for x := 0; x < g.width; x++ {
+		for y := 0; y < g.height; y++ {
+			g.grid[x][y] = NewNode(
+				float64(x)*SCALE+SCALE/2,
+				float64(y)*SCALE+SCALE/2,
+			)
 		}
-
-		particles[j].Draw(batch)
 	}
 
-	wg.Done()
+	//Reset particles
+	g.particles = []*Particle{}
+	for i := 0; i < NUM_PARTICLES; i++ {
+		g.particles = append(g.particles, NewParticle())
+	}
+}
+
+func (g *Grid) Update(screen *ebiten.Image) error {
+	// Quit if escape pressed
+	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
+		return fmt.Errorf("Exiting game")
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyR) {
+		g.Restart()
+	}
+
+	// Accelerate nodes' acceleration
+	for x := range g.grid {
+		for y := range g.grid[x] {
+			g.grid[x][y].Update()
+		}
+	}
+	depth += DELTA_Z
+
+	//Move and update the acceleration of the particles
+	//Multithreaded to prevent slowdown if possible
+	wg := &sync.WaitGroup{}
+	for i := 0; i < PARTICLE_THREADS; i++ {
+		wg.Add(1)
+		go func(i int, wg *sync.WaitGroup) {
+			start := i * (NUM_PARTICLES / PARTICLE_THREADS)
+			stop := start + (NUM_PARTICLES / PARTICLE_THREADS)
+			for j := start; j < stop; j++ {
+				g.particles[j].Update(g.grid)
+			}
+
+			wg.Done()
+		}(i, wg)
+	}
+	wg.Wait()
+
+	return nil
+}
+
+func (g *Grid) Draw(screen *ebiten.Image) {
+	//Uncomment to draw vectors showing acceleration
+	//for x := range g.grid {
+	//	for y := range g.grid[x] {
+	//		g.grid[x][y].Draw(screen)
+	//	}
+	//}
+
+	// Uncommment to draw colorscheme in top left
+	//op := &ebiten.DrawImageOptions{}
+	//op.GeoM.Scale(COLORSCHEME_SCALE,COLORSCHEME_SCALE)
+	//op.GeoM.Translate(10, 10)
+	//screen.DrawImage(picture, op)
+
+	for _, particle := range g.particles {
+		particle.Draw(screen)
+	}
+
+	// Uncomment to draw fps in top left
+	//fps := fmt.Sprintf("Current FPS: %.1f", ebiten.CurrentFPS())
+	//ebitenutil.DebugPrint(screen, fps)
+}
+
+func (g *Grid) Layout(_, _ int) (int, int) {
+	return int(WINDOW_X), int(WINDOW_Y)
 }
 
 func main() {
-	rand.Seed(time.Now().Unix())
-	pixelgl.Run(run)
+	ebiten.SetWindowSize(int(WINDOW_X), int(WINDOW_Y))
+	ebiten.SetWindowTitle("Flowgraph")
+	ebiten.SetMaxTPS(60)
+	ebiten.SetScreenClearedEveryFrame(CLEAR_EACH_FRAME)
+	ebiten.SetRunnableOnUnfocused(true)
+	if err := ebiten.RunGame(NewGrid()); err != nil {
+		log.Fatal(err)
+	}
 }
