@@ -48,7 +48,7 @@ func NewRecorder(out io.Writer, frames int) *Recorder {
 		gif: &gif.GIF{
 			Image:     make([]*image.Paletted, frames),
 			Delay:     make([]int, frames),
-			LoopCount: -1,
+			LoopCount: 0,
 		},
 		pipe: make(chan order),
 	}
