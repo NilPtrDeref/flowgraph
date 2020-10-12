@@ -18,8 +18,7 @@ import (
 
 /* Global constants */
 // Window width and height
-//const WINDOW_X, WINDOW_Y float64 = 1200, 800
-const WINDOW_X, WINDOW_Y float64 = 600, 600
+const WINDOW_X, WINDOW_Y float64 = 800, 800
 
 // Grid element width/height
 const SCALE float64 = 5
@@ -33,7 +32,7 @@ const CLEAR_EACH_FRAME = true
 
 // Draw a trail behind the particles.
 const DRAW_TRAIL = true
-const MAX_TRAIL_LEN = 10
+const MAX_TRAIL_LEN = 3
 
 // Draw FPS counter in the top left.
 const DRAW_FPS = true
