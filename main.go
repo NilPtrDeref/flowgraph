@@ -47,7 +47,7 @@ const DELTA_Z = 0.001
 const SIMILARITY = 0.1
 
 // Number of particles to flow.
-const NUM_PARTICLES = 1000
+const NUM_PARTICLES = 5000
 
 // Number of threads to render the particles with.
 // DO NOT MAKE THIS <= 0, IT WILL CRASH THE PROGRAM!
@@ -62,7 +62,7 @@ const PARTICLE_WIDTH = 2
 const COLORSCHEME_SCALE = 50
 
 // Number of frames to record.
-// If it is greater than 0, the program will generate a gif at render.gif
+// If it is greater than 0, the program will generate a gif at output.gif
 // and then exit.
 const RECORD_FRAMES = 0
 
