@@ -1,15 +1,17 @@
 package main
 
 import (
-	"github.com/hajimehoshi/ebiten"
-	vec "github.com/ungerik/go3d/float64/vec2"
 	"math"
 	"math/rand"
+
+	"github.com/hajimehoshi/ebiten"
+	vec "github.com/ungerik/go3d/float64/vec2"
 )
 
 type Particle struct {
 	pos, vel *vec.T
 	color    *ebiten.Image
+	history  []vec.T
 }
 
 // Create a particle with a random starting position/color.
@@ -43,6 +45,13 @@ func (p *Particle) Update(grid [][]*Node) {
 
 // Move a particle based on it's current velocity.
 func (p *Particle) Move() {
+	if DRAW_TRAIL {
+		p.history = append(p.history, *p.pos)
+		if len(p.history) > MAX_TRAIL_LEN {
+			p.history = p.history[1:]
+		}
+	}
+
 	p.pos = p.pos.Add(p.vel)
 
 	// Wrap around if necessary
@@ -78,6 +87,19 @@ func (p *Particle) Accelerate(accl *vec.T) {
 
 // Draw a particle to the screen
 func (p *Particle) Draw(screen *ebiten.Image) {
+	// Draw the trail
+	if DRAW_TRAIL {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(PARTICLE_WIDTH, PARTICLE_WIDTH)
+		for trail := len(p.history) - 1; trail > -1; trail-- {
+			op.ColorM.Scale(1, 1, 1, 0.85)
+			op.GeoM.Translate(p.history[trail][0], p.history[trail][1])
+			screen.DrawImage(p.color, op)
+			op.GeoM.Translate(-p.history[trail][0], -p.history[trail][1])
+		}
+	}
+
+	// Draw the particle itself
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Scale(PARTICLE_WIDTH, PARTICLE_WIDTH)
 	op.GeoM.Translate(p.pos[0], p.pos[1])

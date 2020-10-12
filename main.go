@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hajimehoshi/ebiten/ebitenutil"
+
 	"github.com/hajimehoshi/ebiten"
 	"github.com/ojrac/opensimplex-go"
 )
@@ -29,6 +31,13 @@ const ACCELERATION_MAGNITUDE = 0.1
 // Whether the program should clear the frame each time
 const CLEAR_EACH_FRAME = true
 
+// Draw a trail behind the particles.
+const DRAW_TRAIL = true
+const MAX_TRAIL_LEN = 10
+
+// Draw FPS counter in the top left.
+const DRAW_FPS = true
+
 // How fast the depth changes.
 // Bigger is more change.
 const DELTA_Z = 0.001
@@ -38,11 +47,11 @@ const DELTA_Z = 0.001
 const SIMILARITY = 0.1
 
 // Number of particles to flow.
-const NUM_PARTICLES = 20000
+const NUM_PARTICLES = 1000
 
 // Number of threads to render the particles with.
 // DO NOT MAKE THIS <= 0, IT WILL CRASH THE PROGRAM!
-const PARTICLE_THREADS = 10
+const PARTICLE_THREADS = 1
 
 // Maximum angle for acceleration within a node.
 const MAX_ANGLE = math.Pi * 2
@@ -200,9 +209,10 @@ func (g *Grid) Draw(screen *ebiten.Image) {
 		particle.Draw(screen)
 	}
 
-	// Uncomment to draw fps in top left
-	//fps := fmt.Sprintf("Current FPS: %.1f", ebiten.CurrentFPS())
-	//ebitenutil.DebugPrint(screen, fps)
+	if DRAW_FPS {
+		fps := fmt.Sprintf("Current FPS: %.1f", ebiten.CurrentFPS())
+		ebitenutil.DebugPrint(screen, fps)
+	}
 
 	if g.recorder != nil {
 		_ = g.recorder.Update(screen)
